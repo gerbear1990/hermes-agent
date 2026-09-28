@@ -20,6 +20,23 @@ from rich.markup import escape as _escape
 from typing import Any, Dict, List, Optional
 
 
+def format_token_usage_line(agent) -> Optional[str]:
+    """``Tokens:         <in> input, <out> output``, or None when the session made no API calls.
+
+    Automation wrappers scrape this line out of a one-shot run's output to attribute its spend
+    (the Paperclip hermes adapter's ``TOKEN_USAGE_REGEX``), so the wording is a contract rather
+    than cosmetics — ``tests/hermes_cli/test_exit_summary_tokens.py`` pins the consumer's regex
+    so an upstream change to it fails here instead of going quiet in production. The integers
+    are deliberately unformatted: that regex captures ``(\\d+)``, so "40,329 input" would be
+    read as 329.
+    """
+    input_tokens = int(getattr(agent, "session_input_tokens", 0) or 0)
+    output_tokens = int(getattr(agent, "session_output_tokens", 0) or 0)
+    if not (input_tokens or output_tokens):
+        return None
+    return f"Tokens:         {input_tokens} input, {output_tokens} output"
+
+
 def _user_turn_indices(history: list) -> list[int]:
     """Indices of *real* user turns: excludes ephemeral scaffolding, display_kind timeline
     rows and compaction handoffs — the same predicate as resume turn counting."""
@@ -1188,3 +1205,6 @@ class CLISessionMixin:
             print(f"Title:          {session_title}")
         print(f"Duration:       {duration_str}")
         print(f"Messages:       {msg_count} ({user_msgs} user, {tool_calls} tool calls)")
+        token_line = format_token_usage_line(getattr(self, "agent", None))
+        if token_line:
+            print(token_line)

@@ -177,6 +177,20 @@ def _single_query_exit_code(result, *, credentials_rate_limited: bool = False) -
     return 1
 
 
+def _print_quiet_token_usage(cli) -> None:
+    """Emit the scraped token line beside the stderr ``session_id`` on the ``-Q`` path.
+
+    ``-Q`` never calls ``_print_exit_summary``, so without this a ``quiet: true`` wrapper
+    silently loses the run's spend attribution while ``-q`` keeps it. Emitter runs are
+    excluded by the caller: they carry usage in the JSONL ``result`` record instead.
+    """
+    from hermes_cli.cli_session_mixin import format_token_usage_line
+
+    line = format_token_usage_line(getattr(cli, "agent", None))
+    if line:
+        print(line, file=sys.stderr)
+
+
 def _run_quiet_single_query(cli, effective_query, emitter=None):
     """Quiet (-Q) one-shot turn: run, print the response (stderr for errors/session_id), then sys.exit with the automation exit code.
     With a ``StreamJsonEmitter`` the final answer and the exit line become the terminal ``result`` JSONL record instead.
@@ -209,6 +223,7 @@ def _run_quiet_single_query(cli, effective_query, emitter=None):
             if emitter is not None:
                 exit_single_query(emitter.emit_result({"failed": True, "error": "Interrupted"}, session_id=cli.session_id or "", exit_code=130))
             print(f"\nsession_id: {cli.session_id}", file=sys.stderr)
+            _print_quiet_token_usage(cli)
             exit_single_query(130)
         # The exit line below reports session_id to stderr for automation wrappers;
         # without this sync it would point at the ended parent after compression.
@@ -282,6 +297,7 @@ def _run_quiet_single_query(cli, effective_query, emitter=None):
 
     if emitter is None:
         print(f"\nsession_id: {cli.session_id}", file=sys.stderr)
+        _print_quiet_token_usage(cli)
 
     _exit_code = _single_query_exit_code(result)
     if emitter is not None:
